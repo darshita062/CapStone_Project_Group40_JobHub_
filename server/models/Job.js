@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 
 const jobSchema = new mongoose.Schema({
+  // Job basic details
   title: {
     type: String,
     required: true,
@@ -11,6 +12,7 @@ const jobSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  // Company information for job posting
   company: {
     name: {
       type: String,
@@ -23,6 +25,7 @@ const jobSchema = new mongoose.Schema({
     industry: String,
     size: String
   },
+  // Job location and mode
   location: {
     type: String,
     required: true,
@@ -46,6 +49,7 @@ const jobSchema = new mongoose.Schema({
     required: true,
     index: true
   },
+  // Salary details
   salary: {
     min: Number,
     max: Number,
@@ -59,6 +63,7 @@ const jobSchema = new mongoose.Schema({
       default: 'yearly'
     }
   },
+  // Skills required for the job
   skills: {
     type: [String],
     required: true,
@@ -75,6 +80,7 @@ const jobSchema = new mongoose.Schema({
     required: true,
     index: true
   },
+  // Status and visibility
   isActive: {
     type: Boolean,
     default: true,
@@ -90,6 +96,7 @@ const jobSchema = new mongoose.Schema({
     index: true
   },
   tags: [String],
+  // Job analytics
   views: {
     type: Number,
     default: 0
