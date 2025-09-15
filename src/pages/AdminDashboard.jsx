@@ -559,3 +559,4 @@ const AdminDashboard = () => {
 };
 
 export default AdminDashboard;
+// End of AdminDashboard component
