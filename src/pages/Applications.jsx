@@ -375,3 +375,4 @@ const Applications = () => {
 };
 
 export default Applications;
+// End of Application component
