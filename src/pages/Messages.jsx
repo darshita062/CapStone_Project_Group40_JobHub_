@@ -508,3 +508,4 @@ const Messages = () => {
 };
 
 export default Messages;
+//end of messages component
