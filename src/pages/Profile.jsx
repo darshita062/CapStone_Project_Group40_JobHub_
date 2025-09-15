@@ -776,3 +776,4 @@ const Profile = () => {
 };
 
 export default Profile;
+//End of profile component
