@@ -388,3 +388,4 @@ const Register = () => {
 };
 
 export default Register;
+//end of register component
