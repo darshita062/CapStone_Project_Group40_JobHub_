@@ -597,3 +597,4 @@ const Dashboard = () => {
 };
 
 export default Dashboard;
+// End of Dashboard component
