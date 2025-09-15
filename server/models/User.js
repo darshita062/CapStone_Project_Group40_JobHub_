@@ -10,7 +10,7 @@ const userSchema = new mongoose.Schema({
   email: {
     type: String,
     required: true,
-    unique: true,
+    unique: true,              // Ensure unique email per user
     lowercase: true,
     trim: true
   },
@@ -22,7 +22,7 @@ const userSchema = new mongoose.Schema({
   },
   googleId: {
     type: String,
-    sparse: true
+    sparse: true        // Allows null/undefined but keeps unique indexing for Google logins
   },
   role: {
     type: String,
@@ -37,6 +37,7 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  // Profile information for users
   profile: {
     phone: String,
     location: String,
@@ -59,6 +60,7 @@ const userSchema = new mongoose.Schema({
       uploadDate: Date
     }
   },
+  // Company information (for recruiters/admins)
   company: {
     name: String,
     website: String,
@@ -71,6 +73,7 @@ const userSchema = new mongoose.Schema({
       contentType: String
     }
   },
+  // Job preferences for students
   preferences: {
     jobTypes: [String],
     locations: [String],
