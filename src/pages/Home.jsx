@@ -371,3 +371,4 @@ const Home = () => {
 };
 
 export default Home;
+//end of home component
