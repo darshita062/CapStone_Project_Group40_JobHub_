@@ -1,8 +1,9 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import axios from 'axios';
 
-// Set baseURL so requests go directly to backend (port 5000), not 5173
-axios.defaults.baseURL = import.meta.env?.VITE_API_URL || 'http://localhost:5000';
+// FIXED: Use correct backend port 5050 and create API_URL constant
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5050';
+axios.defaults.baseURL = API_URL;
 
 const AuthContext = createContext();
 
@@ -152,8 +153,10 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // FIXED: Use full backend URL instead of relative path
   const loginWithGoogle = () => {
-    window.location.href = '/api/auth/google';
+    console.log('🚀 Initiating Google OAuth to:', `${API_URL}/api/auth/google`);
+    window.location.href = `${API_URL}/api/auth/google`;
   };
 
   const handleGoogleCallback = (token) => {

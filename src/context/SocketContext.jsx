@@ -13,7 +13,7 @@ export const SocketProvider = ({ children }) => {
   useEffect(() => {
     if (isAuthenticated && token) {
       // Create socket connection
-      const newSocket = io('http://localhost:5000', {
+      const newSocket = io('http://localhost:5050', {
         auth: {
           token: token
         },

@@ -15,50 +15,76 @@ const generateToken = (userId) => {
 
 // ---------- Google OAuth Routes ----------
 
-// Quick diagnostic to ensure env is wired
+// Diagnostic endpoint to check OAuth configuration
 router.get('/google/check', (req, res) => {
   res.json({
-    ok: true,
+    status: 'ok',
     client_id_present: Boolean(process.env.GOOGLE_CLIENT_ID),
-    callback_url: process.env.GOOGLE_CALLBACK_URL || '/api/auth/google/callback'
+    client_id_preview: process.env.GOOGLE_CLIENT_ID?.substring(0, 20) + '...',
+    callback_url: process.env.GOOGLE_CALLBACK_URL || 'http://localhost:5050/api/auth/google/callback',
+    client_url: process.env.CLIENT_URL || 'http://localhost:5173'
   });
 });
 
-// Initiate Google OAuth — IMPORTANT: scope must be present
+// Initiate Google OAuth - CRITICAL: Must have scope
 router.get(
   '/google',
+  (req, res, next) => {
+    console.log('🚀 Google OAuth initiated');
+    next();
+  },
   passport.authenticate('google', {
     scope: ['profile', 'email'],
     prompt: 'select_account',
-    accessType: 'offline'
+    accessType: 'offline',
+    session: false
   })
 );
 
 // Handle Google OAuth callback
 router.get(
   '/google/callback',
+  (req, res, next) => {
+    console.log('📥 Google OAuth callback hit');
+    console.log('   Query params:', Object.keys(req.query));
+    next();
+  },
   passport.authenticate('google', {
     session: false,
-    failureRedirect: `${process.env.CLIENT_URL}/login?error=oauth_failed`
+    failureRedirect: `${process.env.CLIENT_URL || 'http://localhost:5173'}/login?error=oauth_failed`
   }),
   async (req, res) => {
     try {
+      console.log('✅ Google OAuth authentication successful');
+      console.log('   User:', req.user?.email);
+      
+      if (!req.user) {
+        console.error('❌ No user object after authentication');
+        return res.redirect(`${process.env.CLIENT_URL || 'http://localhost:5173'}/login?error=no_user`);
+      }
+      
       const token = generateToken(req.user._id);
-      const redirectUrl = `${process.env.CLIENT_URL}/auth/callback?token=${token}`;
+      const redirectUrl = `${process.env.CLIENT_URL || 'http://localhost:5173'}/auth/callback?token=${token}`;
+      
+      console.log('🔄 Redirecting to:', redirectUrl);
       return res.redirect(redirectUrl);
     } catch (error) {
-      console.error('Google OAuth callback error:', error);
-      return res.redirect(`${process.env.CLIENT_URL}/login?error=oauth_failed`);
+      console.error('❌ Google OAuth callback error:', error);
+      return res.redirect(`${process.env.CLIENT_URL || 'http://localhost:5173'}/login?error=oauth_failed`);
     }
   }
 );
 
-// Optional explicit failure route if you want to debug
+// Optional explicit failure route for debugging
 router.get('/google/failure', (req, res) => {
-  res.status(401).json({ message: 'Google OAuth failed' });
+  console.error('❌ Google OAuth failure route hit');
+  res.status(401).json({ 
+    message: 'Google OAuth failed',
+    hint: 'Check server logs for details'
+  });
 });
 
-// ---------- Email/Password Auth (unchanged) ----------
+// ---------- Email/Password Auth Routes ----------
 
 // Register
 router.post('/register', [
@@ -91,7 +117,12 @@ router.post('/register', [
     res.status(201).json({
       message: 'User registered successfully',
       token,
-      user: user.getPublicProfile()
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role
+      }
     });
 
   } catch (error) {
@@ -108,35 +139,32 @@ router.post('/login', [
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({
-        message: 'Validation failed',
-        errors: errors.array()
+      return res.status(400).json({ 
+        message: 'Validation failed', 
+        errors: errors.array() 
       });
     }
 
     const { email, password } = req.body;
 
     const user = await User.findOne({ email });
-    if (!user) return res.status(400).json({ message: 'Invalid credentials' });
-
-    if (user.isLocked) {
-      return res.status(423).json({
-        message: 'Account temporarily locked due to too many failed login attempts'
-      });
+    if (!user) {
+      return res.status(401).json({ message: 'Invalid email or password' });
     }
 
-    if (!user.isActive) {
-      return res.status(401).json({ message: 'Account is deactivated' });
+    if (user.isLocked) {
+      return res.status(423).json({ 
+        message: 'Account is locked. Please try again later.' 
+      });
     }
 
     const isValidPassword = await user.comparePassword(password);
     if (!isValidPassword) {
       await user.incLoginAttempts();
-      return res.status(400).json({ message: 'Invalid credentials' });
+      return res.status(401).json({ message: 'Invalid email or password' });
     }
 
-    if (user.loginAttempts > 0) await user.resetLoginAttempts();
-
+    user.loginAttempts = 0;
     user.lastLogin = new Date();
     await user.save();
 
@@ -145,7 +173,12 @@ router.post('/login', [
     res.json({
       message: 'Login successful',
       token,
-      user: user.getPublicProfile()
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role
+      }
     });
 
   } catch (error) {
@@ -157,93 +190,54 @@ router.post('/login', [
 // Get current user
 router.get('/me', authenticateToken, async (req, res) => {
   try {
-    const user = await User.findById(req.user._id)
-      .populate('profile.resume')
-      .populate('profile.profilePicture');
+    const user = await User.findById(req.user._id).select('-password');
+    
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
 
-    res.json(user.getPublicProfile());
+    res.json(user);
   } catch (error) {
     console.error('Get user error:', error);
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ message: 'Server error while fetching user' });
   }
 });
 
 // Update profile
-router.put('/profile', authenticateToken, [
-  body('name').optional().trim().isLength({ min: 2 }),
-  body('profile.phone').optional().isMobilePhone(),
-  body('profile.linkedinUrl').optional().isURL(),
-  body('profile.githubUrl').optional().isURL(),
-  body('profile.portfolioUrl').optional().isURL()
-], async (req, res) => {
+router.put('/profile', authenticateToken, async (req, res) => {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({
-        message: 'Validation failed',
-        errors: errors.array()
-      });
+    const updates = req.body;
+    
+    if (updates.profile) {
+      updates.profile = { ...req.user.profile, ...updates.profile };
+    }
+    if (updates.company) {
+      updates.company = { ...req.user.company, ...updates.company };
+    }
+    if (updates.preferences) {
+      updates.preferences = { ...req.user.preferences, ...updates.preferences };
     }
 
-    const updates = req.body;
     const user = await User.findByIdAndUpdate(
       req.user._id,
       { $set: updates },
       { new: true, runValidators: true }
-    );
+    ).select('-password');
 
     res.json({
       message: 'Profile updated successfully',
-      user: user.getPublicProfile()
+      user
     });
 
   } catch (error) {
-    console.error('Profile update error:', error);
-    res.status(500).json({ message: 'Server error during profile update' });
+    console.error('Update profile error:', error);
+    res.status(500).json({ message: 'Server error while updating profile' });
   }
 });
 
-// Change password
-router.put('/change-password', authenticateToken, [
-  body('currentPassword').notEmpty().withMessage('Current password required'),
-  body('newPassword').isLength({ min: 6 }).withMessage('New password must be at least 6 characters')
-], async (req, res) => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({
-        message: 'Validation failed',
-        errors: errors.array()
-      });
-    }
-
-    const { currentPassword, newPassword } = req.body;
-    const user = await User.findById(req.user._id);
-
-    const isValidPassword = await user.comparePassword(currentPassword);
-    if (!isValidPassword) {
-      return res.status(400).json({ message: 'Current password is incorrect' });
-    }
-
-    user.password = newPassword;
-    await user.save();
-
-    res.json({ message: 'Password changed successfully' });
-
-  } catch (error) {
-    console.error('Change password error:', error);
-    res.status(500).json({ message: 'Server error during password change' });
-  }
-});
-
-// Logout
+// Logout (client-side token removal, but endpoint for consistency)
 router.post('/logout', authenticateToken, async (req, res) => {
-  try {
-    res.json({ message: 'Logged out successfully' });
-  } catch (error) {
-    console.error('Logout error:', error);
-    res.status(500).json({ message: 'Server error during logout' });
-  }
+  res.json({ message: 'Logout successful' });
 });
 
 export default router;
